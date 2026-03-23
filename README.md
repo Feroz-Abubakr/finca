@@ -58,14 +58,13 @@ Backend must be running before frontend.
 ## Screenshots
 
 Dashboard:
-![Dashboard](screenshots/dashboard.png)
+![Dashboard](screenshots/Dashboard%20Page.png)
 
 Transactions:
-![Transactions](screenshots/transactions.png)
+![Transactions](screenshots/Transaction%20Page.png)
 
 Exchange:
-![Exchange](screenshots/exchange.png)
-
+![Exchange](screenshots/Exchange%20Page.png)
 ## Algorithm
 ConvertedAmount = Amount × Rate
 
