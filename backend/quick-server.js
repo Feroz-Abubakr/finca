@@ -2,16 +2,12 @@ const express = require("express");
 const cors = require("cors");
 
 const app = express();
-const PORT = 5000;
-
 app.use(cors());
 app.use(express.json());
 
 let transactions = [];
 
-/* Exchange part the api can receive amount and rate from frontend and calculates and stores the converted value */
 app.post("/exchange", (req, res) => {
-
   const { amount, rate } = req.body;
 
   const result = amount * rate;
@@ -25,21 +21,14 @@ app.post("/exchange", (req, res) => {
 
   transactions.push(tx);
 
-  res.json({
-    status: "success",
-    transaction: tx
-  });
-
+  res.json({ status: "success", transaction: tx });
 });
 
-/* Transaction part of Finca */
 app.get("/transactions", (req, res) => {
   res.json(transactions);
 });
 
-/* Dashboard part */
 app.get("/dashboard", (req, res) => {
-
   res.json({
     cashUSD: 10000,
     cashAFN: 500000,
@@ -47,9 +36,8 @@ app.get("/dashboard", (req, res) => {
     moneyReceived: 0,
     transactions: transactions.length
   });
-
 });
 
-app.listen(PORT, () => {
-  console.log("MVP Backend running on http://localhost:5000");
+app.listen(5000, () => {
+  console.log("Backend running on http://localhost:5000");
 });

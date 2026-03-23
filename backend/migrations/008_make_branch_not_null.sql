@@ -1,0 +1,5 @@
+ALTER TABLE accounts
+ALTER COLUMN branch_id SET NOT NULL;
+
+ALTER TABLE transactions
+ALTER COLUMN branch_id SET NOT NULL;

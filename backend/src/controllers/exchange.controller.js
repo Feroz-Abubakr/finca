@@ -1,43 +1,36 @@
-const exchangeService = require("../services/exchange.service");
+const db = require("../database/connection");
 
 const createExchange = async (req, res) => {
   try {
-    const {
-      fromCurrencyCode,
-      toCurrencyCode,
-      fromAmount,
-      toAmount,
-      commissionAmount = 0,
-      description,
-    } = req.body;
 
-    if (!fromCurrencyCode || !toCurrencyCode || !fromAmount || !toAmount) {
-      return res.status(400).json({
-        success: false,
-        message: "Missing required fields",
-      });
-    }
+    const { type, description, branch_id, profit } = req.body;
 
-    const result = await exchangeService.createExchange({
-      fromCurrencyCode,
-      toCurrencyCode,
-      fromAmount,
-      toAmount,
-      commissionAmount,
-      description,
+    const query = `
+      INSERT INTO transactions (type, description, branch_id, profit)
+      VALUES ($1, $2, $3, $4)
+      RETURNING *
+    `;
+
+    const values = [type, description, branch_id, profit];
+
+    const result = await db.query(query, values);
+
+    res.status(201).json({
+      message: "Transaction created successfully",
+      transaction: result.rows[0]
     });
 
-    return res.status(201).json(result);
   } catch (error) {
+
     console.error("Exchange Error:", error);
 
-    return res.status(500).json({
-      success: false,
-      message: error.message,
+    res.status(500).json({
+      error: "Exchange failed"
     });
+
   }
 };
 
 module.exports = {
-  createExchange,
+  createExchange
 };

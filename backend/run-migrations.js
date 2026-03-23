@@ -1,9 +1,15 @@
 require("dotenv").config();
+
+const { Pool } = require("pg");
 const fs = require("fs");
 const path = require("path");
-const pool = require("./src/database/connection");
 
-const runMigrations = async () => {
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: false
+});
+
+async function runMigrations() {
   try {
     const migrationsPath = path.join(__dirname, "migrations");
     const files = fs.readdirSync(migrationsPath).sort();
@@ -17,11 +23,11 @@ const runMigrations = async () => {
     }
 
     console.log("All migrations executed successfully.");
-    process.exit(0);
+    process.exit();
   } catch (error) {
     console.error("Migration failed:", error);
     process.exit(1);
   }
-};
+}
 
 runMigrations();

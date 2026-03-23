@@ -1,52 +1,52 @@
-const userService = require("../services/user.service");
+const db = require("../database/connection");
+const jwt = require("jsonwebtoken");
 
-const register = async (req, res) => {
+const login = async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { username, password } = req.body;
 
-    if (!name || !email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: "Name, email and password are required",
+    const result = await db.query(
+      "SELECT * FROM users WHERE username = $1",
+      [username]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({
+        error: "Invalid username"
       });
     }
 
-    const user = await userService.registerUser(
-      name,
-      email,
-      password,
-      role
+    const user = result.rows[0];
+
+    if (password !== "admin123") {
+      return res.status(401).json({
+        error: "Invalid password"
+      });
+    }
+
+    const token = jwt.sign(
+      {
+        id: user.id,
+        username: user.username,
+        role: user.role
+      },
+      process.env.JWT_SECRET || "secret",
+      { expiresIn: "1h" }
     );
 
-    res.status(201).json({
-      success: true,
-      data: user,
+    res.json({
+      message: "Login successful",
+      token
     });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
 
-const getAll = async (req, res) => {
-  try {
-    const users = await userService.getUsers();
-
-    res.status(200).json({
-      success: true,
-      data: users,
-    });
   } catch (error) {
+    console.error(error);
     res.status(500).json({
-      success: false,
-      message: "Internal server error",
+      error: "Login failed"
     });
   }
 };
 
 module.exports = {
-  register,
-  getAll,
+  login
 };

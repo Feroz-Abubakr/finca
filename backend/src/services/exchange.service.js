@@ -1,155 +1,65 @@
-const pool = require("../database/connection");
+const db = require("../config/db");
 
-const createExchange = async ({
-  fromCurrencyCode,
-  toCurrencyCode,
-  fromAmount,
-  toAmount,
-  commissionAmount = 0,
-  description,
-}) => {
-  const client = await pool.connect();
+async function createExchange(branchId, data) {
+  const { fromCurrency, toCurrency, fromAmount } = data;
 
   try {
-    await client.query("BEGIN");
-
-    // 1️⃣ Get currencies
-    const currencyResult = await client.query(
-      `SELECT id, code FROM currencies WHERE code IN ($1, $2)`,
-      [fromCurrencyCode, toCurrencyCode]
+    // get market rate
+    const rateResult = await db.query(
+      `SELECT rate FROM exchange_rates 
+       WHERE base_currency = $1 AND target_currency = $2 
+       ORDER BY created_at DESC LIMIT 1`,
+      [fromCurrency, toCurrency]
     );
 
-    if (currencyResult.rows.length !== 2) {
-      throw new Error("Invalid currency code");
+    if (rateResult.rows.length === 0) {
+      throw new Error("Exchange rate not found");
     }
 
-    // 2️⃣ Get accounts
-    const accountsResult = await client.query(
-      `
-      SELECT id, name
-      FROM accounts
-      WHERE name IN (
-        $1,
-        $2,
-        'Commission Income USD',
-        'Exchange Gain/Loss USD'
-      )
-      `,
-      [`Cash ${fromCurrencyCode}`, `Cash ${toCurrencyCode}`]
+    const rate = rateResult.rows[0].rate;
+
+    // calculate amounts
+    const toAmount = fromAmount * rate;
+
+    // example profit (1 AFN per USD)
+    const profit = fromAmount * 1;
+
+    // update balances
+    await db.query(
+      `UPDATE cash_balances 
+       SET amount = amount - $1
+       WHERE currency = $2 AND branch_id = $3`,
+      [fromAmount, fromCurrency, branchId]
     );
 
-    const accounts = accountsResult.rows;
-
-    const fromCashAccount = accounts.find(
-      (a) => a.name === `Cash ${fromCurrencyCode}`
+    await db.query(
+      `UPDATE cash_balances 
+       SET amount = amount + $1
+       WHERE currency = $2 AND branch_id = $3`,
+      [toAmount, toCurrency, branchId]
     );
 
-    const toCashAccount = accounts.find(
-      (a) => a.name === `Cash ${toCurrencyCode}`
+    // save transaction
+    const transaction = await db.query(
+      `INSERT INTO transactions 
+      (type, description, branch_id, profit)
+      VALUES ($1,$2,$3,$4)
+      RETURNING *`,
+      [
+        "exchange",
+        `Exchange ${fromAmount} ${fromCurrency} -> ${toAmount} ${toCurrency} @ rate ${rate}`,
+        branchId,
+        profit
+      ]
     );
 
-    const commissionAccount = accounts.find(
-      (a) => a.name === "Commission Income USD"
-    );
+    return transaction.rows[0];
 
-    const gainLossAccount = accounts.find(
-      (a) => a.name === "Exchange Gain/Loss USD"
-    );
-
-    if (!fromCashAccount || !toCashAccount) {
-      throw new Error("Cash account missing");
-    }
-
-    if (!commissionAccount) {
-      throw new Error("Commission account missing");
-    }
-
-    if (!gainLossAccount) {
-      throw new Error("Exchange Gain/Loss account missing");
-    }
-
-    // 3️⃣ Insert transaction WITH TYPE
-    const transactionResult = await client.query(
-      `
-      INSERT INTO transactions (type, description)
-      VALUES ($1, $2)
-      RETURNING id
-      `,
-      ["exchange", description]
-    );
-
-    const transactionId = transactionResult.rows[0].id;
-
-    // 4️⃣ Journal Entries
-
-    // Debit: Cash received
-    await client.query(
-      `
-      INSERT INTO journal_entries (transaction_id, account_id, debit, credit)
-      VALUES ($1, $2, $3, 0)
-      `,
-      [transactionId, fromCashAccount.id, fromAmount]
-    );
-
-    // Credit: Cash given
-    await client.query(
-      `
-      INSERT INTO journal_entries (transaction_id, account_id, debit, credit)
-      VALUES ($1, $2, 0, $3)
-      `,
-      [transactionId, toCashAccount.id, toAmount]
-    );
-
-    // Credit: Commission
-    if (commissionAmount > 0) {
-      await client.query(
-        `
-        INSERT INTO journal_entries (transaction_id, account_id, debit, credit)
-        VALUES ($1, $2, 0, $3)
-        `,
-        [transactionId, commissionAccount.id, commissionAmount]
-      );
-    }
-
-    // 5️⃣ Gain/Loss calculation
-    const difference = fromAmount - commissionAmount - toAmount;
-
-    if (difference !== 0) {
-      if (difference > 0) {
-        // Gain → Credit
-        await client.query(
-          `
-          INSERT INTO journal_entries (transaction_id, account_id, debit, credit)
-          VALUES ($1, $2, 0, $3)
-          `,
-          [transactionId, gainLossAccount.id, difference]
-        );
-      } else {
-        // Loss → Debit
-        await client.query(
-          `
-          INSERT INTO journal_entries (transaction_id, account_id, debit, credit)
-          VALUES ($1, $2, $3, 0)
-          `,
-          [transactionId, gainLossAccount.id, Math.abs(difference)]
-        );
-      }
-    }
-
-    await client.query("COMMIT");
-
-    return {
-      success: true,
-      transactionId,
-    };
   } catch (error) {
-    await client.query("ROLLBACK");
     throw error;
-  } finally {
-    client.release();
   }
-};
+}
 
 module.exports = {
-  createExchange,
+  createExchange
 };

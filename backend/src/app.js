@@ -1,24 +1,73 @@
-const express = require("express");
-const cors = require("cors");
-const helmet = require("helmet");
-
-const userRoutes = require("./routes/user.route");
-const exchangeRoutes = require("./routes/exchange.route");
+import express from "express";
+import cors from "cors";
 
 const app = express();
+const PORT = 5000;
 
-// Security middlewares
-app.use(helmet());
 app.use(cors());
 app.use(express.json());
 
-// Health check
-app.get("/", (req, res) => {
-  res.json({ message: "FinCa Exchange ERP API Running" });
+// In-memory storage for MVP
+let transactions = [];
+
+/*
+POST /exchange
+*/
+app.post("/exchange", (req, res) => {
+
+  const { amount, from, to, rate } = req.body;
+
+  const result = amount * rate;
+
+  const tx = {
+    id: Date.now(),
+    amount,
+    from,
+    to,
+    rate,
+    result,
+    createdAt: new Date().toLocaleString()
+  };
+
+  transactions.push(tx);
+
+  res.json({
+    status: "success",
+    transaction: tx
+  });
+
 });
 
-// Routes
-app.use("/api/users", userRoutes);
-app.use("/api/exchange", exchangeRoutes);
+/*
+GET /transactions
+*/
+app.get("/transactions", (req, res) => {
+  res.json(transactions);
+});
 
-module.exports = app;
+/*
+GET /dashboard
+*/
+app.get("/dashboard", (req, res) => {
+
+  let moneySent = 0;
+  let moneyReceived = 0;
+
+  transactions.forEach(t => {
+    moneySent += Number(t.amount);
+    moneyReceived += Number(t.result);
+  });
+
+  res.json({
+    cashUSD: 10000,
+    cashAFN: 500000,
+    moneySent,
+    moneyReceived,
+    transactions: transactions.length
+  });
+
+});
+
+app.listen(PORT, () => {
+  console.log(`Backend running on http://localhost:${PORT}`);
+});
